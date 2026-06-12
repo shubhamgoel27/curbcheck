@@ -44,7 +44,7 @@ def restriction_to_json(r) -> dict:
 
 
 READ_PROMPT = """Look at the parking sign stack in this image. Extract EVERY sign as a JSON array.
-Each element: {"kind": one of [no_parking, no_stopping, tow_away, time_limit, permit_limit, street_cleaning, loading_only],
+Each element: {"kind": one of [no_parking, no_stopping, tow_away, time_limit, permit_limit, street_cleaning, loading_only] (use permit_limit when the sign has a permit exemption like EXCEPT AREA X PERMIT, time_limit otherwise),
 "days": list like ["MON","TUE"...] (the days the restriction applies),
 "start": "HH:MM" 24h, "end": "HH:MM" 24h,
 "limit_minutes": int or null, "permit_area": letter or null, "tow": true/false}.

@@ -30,19 +30,25 @@ def ask_claude(prompt: str, image_path: Path) -> str:
 
 def extract_json(text: str):
     text = re.sub(r"```(?:json)?", "", text).strip("` \n")
-    # find first [ or { and parse from there
+    dec = json.JSONDecoder()
+    # parse a valid JSON prefix starting at each [ or { (models often append prose)
     for i, ch in enumerate(text):
         if ch in "[{":
             try:
-                return json.loads(text[i:])
+                obj, _ = dec.raw_decode(text[i:])
+                return obj
             except json.JSONDecodeError:
                 continue
     return None
 
 
 def norm_restriction(r: dict) -> tuple:
+    kind = str(r.get("kind", "")).lower().replace("-", "_")
+    # a time-limit sign with a permit exemption is the same sign under either label
+    if kind == "time_limit" and r.get("permit_area"):
+        kind = "permit_limit"
     return (
-        str(r.get("kind", "")).lower().replace("-", "_"),
+        kind,
         frozenset(str(d)[:3].upper() for d in (r.get("days") or [])),
         str(r.get("start", "")), str(r.get("end", "")),
     )
@@ -96,7 +102,7 @@ def main() -> None:
                     reason_correct += int(sc["correct"])
                 rec = {"image": s["image"], "n_signs": s["n_signs"], "qid": q["qid"],
                        "type": q["type"], "gold": q["gold"], "pred": pred,
-                       "raw": raw[:500], "score": sc}
+                       "raw": raw, "score": sc}
                 f.write(json.dumps(rec) + "\n")
                 f.flush()
                 n_done += 1
