@@ -98,9 +98,10 @@ def harvest_dpw(limit: int) -> None:
         url = row.get("filename", "")
         if not url.startswith("http"):
             continue
-        # permits have multiple photos; use the upload filename to avoid collisions
-        uniq = url.rsplit("/", 1)[-1].replace("/", "-")[:90]
-        if save_image(url, out / f"dpw_{uniq}"):
+        # permits have multiple photos and iPhone filenames repeat; hash the URL
+        import hashlib
+        uniq = hashlib.md5(url.encode()).hexdigest()[:10]
+        if save_image(url, out / f"dpw_{uniq}.jpg"):
             got += 1
             if got % 25 == 0:
                 print(f"   {got}/{limit} images", flush=True)
