@@ -100,7 +100,14 @@ def main() -> None:
     print(f"trainable pool: {len(items)} images ({len(done)} already labeled)")
 
     def label_one(it):
-        raw = ask_claude(TEACHER_PROMPT, it["path"])
+        while True:
+            raw = ask_claude(TEACHER_PROMPT, it["path"])
+            if "session limit" in raw or "Not logged in" in raw or "usage limit" in raw.lower():
+                print("  [limit hit -> sleeping 30 min]", flush=True)
+                import time as _t
+                _t.sleep(1800)
+                continue
+            break
         pred = extract_json(raw)
         ok = isinstance(pred, list)
         if ok:  # drop unreadable-fragment restrictions (all-null timing fields)
