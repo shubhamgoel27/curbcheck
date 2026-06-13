@@ -41,7 +41,7 @@ MODEL = "unsloth/Qwen2.5-VL-3B-Instruct-bnb-4bit"
 
 @app.function(
     image=image,
-    gpu="A100-80GB",
+    gpu="A100-40GB",  # 3B QLoRA peaks ~12-18GB; 40GB tier = same speed, ~16% cheaper than 80GB
     volumes={"/data": vol},
     secrets=[
         modal.Secret.from_name("huggingface"),
