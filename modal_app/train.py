@@ -45,7 +45,7 @@ MODEL = "unsloth/Qwen2.5-VL-3B-Instruct-bnb-4bit"
     volumes={"/data": vol},
     secrets=[
         modal.Secret.from_name("huggingface"),
-        modal.Secret.from_name("wandb"),
+        # wandb optional: create the secret and add it back to enable curve logging
     ],
     timeout=4 * 60 * 60,
 )
@@ -83,17 +83,18 @@ def train(smoke: bool = False):
     if smoke:
         rows = rows[:64]
 
+    # plain list of message dicts with PIL images embedded (the Unsloth-vision contract)
     def to_msg(r):
-        img_path = fix(r["image"])
+        img = PImage.open(fix(r["image"])).convert("RGB")
         return {"messages": [
             {"role": "user", "content": [
-                {"type": "image", "image": img_path},
+                {"type": "image", "image": img},
                 {"type": "text", "text": r["prompt"]},
             ]},
             {"role": "assistant", "content": [{"type": "text", "text": r["response"]}]},
         ]}
 
-    dataset = Dataset.from_list([to_msg(r) for r in rows])
+    dataset = [to_msg(r) for r in rows]
 
     model, processor = FastVisionModel.from_pretrained(
         MODEL, load_in_4bit=True, use_gradient_checkpointing="unsloth",
@@ -105,21 +106,12 @@ def train(smoke: bool = False):
     )
     FastVisionModel.for_training(model)
 
-    def load_images(example):
-        for m in example["messages"]:
-            for c in m["content"]:
-                if c.get("type") == "image":
-                    c["image"] = PImage.open(c["image"]).convert("RGB")
-        return example
-
-    dataset = dataset.map(load_images)
-
     cfg = SFTConfig(
         per_device_train_batch_size=2,
         gradient_accumulation_steps=4,
-        warmup_steps=10,
-        max_steps=30 if smoke else 0,
-        num_train_epochs=0 if smoke else 2,
+        warmup_steps=5 if smoke else 10,
+        max_steps=30 if smoke else -1,
+        num_train_epochs=2,
         learning_rate=1e-4,
         logging_steps=5,
         save_steps=200,
@@ -130,11 +122,13 @@ def train(smoke: bool = False):
         output_dir="/data/runs/qwen25vl3b",
         report_to="wandb" if os.environ.get("WANDB_API_KEY") else "none",
         remove_unused_columns=False,
+        dataset_text_field="",
         dataset_kwargs={"skip_prepare_dataset": True},
+        dataset_num_proc=1,
         max_seq_length=2048,
     )
     trainer = SFTTrainer(
-        model=model, processor=processor, train_dataset=dataset,
+        model=model, tokenizer=processor, train_dataset=dataset,
         data_collator=UnslothVisionDataCollator(model, processor), args=cfg,
     )
     trainer.train()
