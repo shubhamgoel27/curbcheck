@@ -61,3 +61,45 @@ to oversample tow_away signs and 4-sign stacks.
 
 Measured June 2026. Synthetic eval disjoint from training (seed 7, fixed probes). Per-sample
 audit logs in data/results/audit/.
+
+---
+
+## Real-photo eval (500 held-out SF photos, Opus-referenced)
+
+The true test: 500 newest 311 reserve photos, never seen in training, labeled by Opus as gold.
+This is teacher-referenced (gold = frontier model, not human-verified), so it measures how well
+the student matches a strong teacher on real, faded, oblique poles.
+
+Important: real photos are mostly simple (231/500 are downed/missing poles, verdict dist is
+75% "ok"), so the majority-class baseline is 75% and raw verdict accuracy is misleading. Use
+balanced (macro) accuracy.
+
+| Metric | base | tuned |
+|---|:---:|:---:|
+| Read F1 | 0.04 | **0.33** |
+| Pipeline reasoning, raw | 0.77 (= majority baseline) | 0.88 |
+| Pipeline reasoning, **balanced** | 0.45 | **0.82** |
+| tow_risk recall | 0.26 | 0.56 |
+
+**What this proves**
+- Synthetic + teacher training transfers to real photos: read F1 0.04 -> 0.33 (8x), pipeline
+  balanced accuracy 0.45 -> 0.82. The base model genuinely cannot read real signs (0.04 F1).
+
+**The honest gaps**
+- Sim-to-real is large on reading: 0.97 F1 on clean renders vs 0.33 on real photos. Clean
+  synthetic signs are not faded, sticker-covered, sun-bleached Mission Street poles. This is
+  the motivation for more real training data and renderer realism (fading, occlusion).
+- tow_risk recall remains the weakest class (0.56 even tuned). Missing a tow is the expensive
+  error; it is rare (5% of real cases) and hard (the binding sign is often the faded one).
+- Gold is Opus, which itself struggles on the faded signs, so part of the 0.33 read gap is
+  student-teacher disagreement on genuinely illegible images. Human-verifying a sample is the
+  gold-standard follow-up.
+
+## Rebalanced v2: helped synthetic, mixed on real
+
+The v2 model (training oversampled 3/4-sign stacks + tow signs) clearly beat v1 on synthetic
+hard cases (4-sign e2e 0.39 -> 0.67, 4-sign pipeline 0.89 -> 1.0). On real photos v2 was a wash
+on the deployment metric (pipeline raw 0.895 vs v1 0.877) but worse end-to-end (0.43 vs 0.63):
+trained to expect complex stacks, it over-calls restrictions on the mostly-simple real poles.
+A clean distribution-shift lesson: optimize for the eval distribution you will actually deploy
+on. For SF, that is mostly 0-2 sign poles, so v1's distribution generalized better end-to-end.
