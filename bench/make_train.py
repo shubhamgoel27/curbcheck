@@ -35,6 +35,7 @@ from PIL import Image, ImageEnhance, ImageFilter  # noqa: E402
 
 from bench.generate import READ_PROMPT, REASON_PROMPT, restriction_to_json  # noqa: E402
 from render.signs import render_stack, sample_stack  # noqa: E402
+from schema.rules import Kind  # noqa: E402
 from schema.rules import can_park  # noqa: E402
 
 SEED_BASE = {"train": 1000, "val": 500}
@@ -71,7 +72,17 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", choices=["train", "val"], required=True)
     ap.add_argument("--n", type=int, default=2000)
+    ap.add_argument("--rebalance", action="store_true",
+                    help="oversample 3/4-sign stacks and tow_away/no_stopping signs")
     args = ap.parse_args()
+
+    # rebalanced distribution targets the measured weaknesses (4-sign + tow_risk recall)
+    REBAL_SIZE = (0.1, 0.2, 0.35, 0.35)
+    REBAL_KINDS = [
+        (Kind.PERMIT_EXEMPT_LIMIT, 0.22), (Kind.STREET_CLEANING, 0.20),
+        (Kind.NO_STOPPING, 0.20), (Kind.TOW_AWAY, 0.13), (Kind.NO_PARKING, 0.10),
+        (Kind.TIME_LIMIT, 0.10), (Kind.LOADING_ONLY, 0.05),
+    ]
 
     out_dir = ROOT / "data" / args.split
     img_dir = out_dir / "images"
@@ -80,7 +91,8 @@ def main() -> None:
 
     for i in range(args.n):
         rng = random.Random(SEED_BASE[args.split] * 100_000 + i)
-        stack = sample_stack(rng)
+        stack = (sample_stack(rng, size_weights=REBAL_SIZE, kind_weights=REBAL_KINDS)
+                 if args.rebalance else sample_stack(rng))
         img = render_stack(stack, rng)
         if args.split == "train":
             img = jitter(img, rng)

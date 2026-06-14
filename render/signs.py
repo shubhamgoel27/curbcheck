@@ -168,11 +168,14 @@ KIND_WEIGHTS = [
 ]
 
 
-def sample_stack(rng: random.Random, n_signs: int | None = None) -> SignStack:
-    n = n_signs or rng.choices([1, 2, 3, 4], weights=[0.3, 0.4, 0.2, 0.1])[0]
+def sample_stack(rng: random.Random, n_signs: int | None = None,
+                 size_weights: tuple = (0.3, 0.4, 0.2, 0.1),
+                 kind_weights: list | None = None) -> SignStack:
+    n = n_signs or rng.choices([1, 2, 3, 4], weights=list(size_weights))[0]
     kinds = []
-    pool = [k for k, _ in KIND_WEIGHTS]
-    weights = [w for _, w in KIND_WEIGHTS]
+    kw = kind_weights or KIND_WEIGHTS
+    pool = [k for k, _ in kw]
+    weights = [w for _, w in kw]
     while len(kinds) < n:
         k = rng.choices(pool, weights=weights)[0]
         if k not in kinds:  # one of each kind per pole, like real poles mostly

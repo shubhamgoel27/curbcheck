@@ -49,7 +49,8 @@ MODEL = "unsloth/Qwen2.5-VL-3B-Instruct-bnb-4bit"
     ],
     timeout=4 * 60 * 60,
 )
-def train(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = False):
+def train(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = False,
+          manifest: str = "/data/train.jsonl", run: str = "qwen25vl3b"):
     import json
     import os
     from pathlib import Path
@@ -79,7 +80,7 @@ def train(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = Fa
             return f"/data/synth_images/{name}"
         return real_index.get(name, p)
 
-    rows = [json.loads(l) for l in open("/data/train.jsonl")]
+    rows = [json.loads(l) for l in open(manifest)]
     if smoke or probe:
         # probe uses the LARGEST real images so peak VRAM is worst-case, not average
         rows = sorted(rows, key=lambda r: 0 if r["domain"] == "real" else 1)[:64]
@@ -121,7 +122,7 @@ def train(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = Fa
         weight_decay=0.01,
         lr_scheduler_type="cosine",
         seed=7,
-        output_dir="/data/runs/qwen25vl3b",
+        output_dir=f"/data/runs/{run}",
         report_to="wandb" if os.environ.get("WANDB_API_KEY") else "none",
         remove_unused_columns=False,
         dataset_text_field="",
@@ -143,7 +144,7 @@ def train(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = Fa
     if probe:
         print(">>> probe only, not saving")
         return
-    out = "/data/runs/qwen25vl3b/final"
+    out = f"/data/runs/{run}/final"
     model.save_pretrained(out)
     processor.save_pretrained(out)
     vol.commit()
@@ -151,5 +152,6 @@ def train(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = Fa
 
 
 @app.local_entrypoint()
-def main(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = False):
-    train.remote(smoke=smoke, batch=batch, accum=accum, probe=probe)
+def main(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = False,
+         manifest: str = "/data/train.jsonl", run: str = "qwen25vl3b"):
+    train.remote(smoke=smoke, batch=batch, accum=accum, probe=probe, manifest=manifest, run=run)
