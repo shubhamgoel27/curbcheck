@@ -18,6 +18,7 @@ image = (
     .pip_install(
         "transformers>=4.49.0", "accelerate>=1.2.0", "pillow>=10.0.0",
         "torch>=2.5.0", "qwen-vl-utils", "einops", "torchvision",
+        "peft>=0.14.0", "bitsandbytes>=0.45.0",
     )
 )
 
@@ -50,9 +51,19 @@ def run_model(model_key: str):
     if kind == "qwen":
         from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
         from qwen_vl_utils import process_vision_info
-        proc = AutoProcessor.from_pretrained(hf_id if Path(hf_id).exists() else hf_id)
-        model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-            hf_id, torch_dtype=torch.bfloat16, device_map="cuda")
+        is_adapter = Path(hf_id).exists() and (Path(hf_id) / "adapter_config.json").exists()
+        if is_adapter:
+            import json as _json
+            from peft import PeftModel
+            base_id = _json.load(open(Path(hf_id) / "adapter_config.json"))["base_model_name_or_path"]
+            proc = AutoProcessor.from_pretrained(hf_id)  # tuned processor saved alongside
+            base = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                base_id, torch_dtype=torch.bfloat16, device_map="cuda")
+            model = PeftModel.from_pretrained(base, hf_id).merge_and_unload()
+        else:
+            proc = AutoProcessor.from_pretrained(hf_id)
+            model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                hf_id, torch_dtype=torch.bfloat16, device_map="cuda")
 
         def infer(prompt, img_path):
             msgs = [{"role": "user", "content": [
@@ -133,13 +144,23 @@ def run_model(model_key: str):
 @app.local_entrypoint()
 def main(models: str = "qwen3b,smolvlm,tuned"):
     keys = [m.strip() for m in models.split(",")]
-    results = list(run_model.map(keys))
+    raw = list(run_model.map(keys, return_exceptions=True))
+    results = []
+    for k, r in zip(keys, raw):
+        if isinstance(r, Exception):
+            results.append({"model": k, "error": f"{type(r).__name__}: {r}"[:160]})
+        else:
+            results.append(r)
     print("\n=== curbcheck leaderboard ===")
     print(f"{'model':<12} {'read F1':>8} {'reason':>8}")
     for r in results:
-        if r.get("skipped"):
+        if r.get("error"):
+            print(f"{r['model']:<12}  ERROR: {r['error']}")
+        elif r.get("skipped"):
             print(f"{r['model']:<12}  skipped: {r['skipped']}")
-            continue
-        print(f"{r['model']:<12} {r['read_f1']!s:>8} {r['reason_acc']!s:>8}")
+        else:
+            print(f"{r['model']:<12} {r['read_f1']!s:>8} {r['reason_acc']!s:>8}")
     import json
+    from pathlib import Path
+    Path("/tmp/curbcheck_leaderboard.json").write_text(json.dumps(results, indent=1))
     print("\nfull:", json.dumps(results, indent=1))
