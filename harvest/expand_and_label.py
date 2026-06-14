@@ -72,8 +72,15 @@ def worklist(n_signrepair: int) -> list[dict]:
 
 
 def label_v3(path: Path):
+    attempts = 0
     while True:
-        raw = ask_claude(TEACHER_PROMPT_V3, path)
+        try:
+            raw = ask_claude(TEACHER_PROMPT_V3, path)
+        except subprocess.TimeoutExpired:
+            attempts += 1
+            if attempts >= 2:
+                return None, False, "TIMEOUT"   # skip this image, keep the run alive
+            continue
         if any(s in raw for s in ("session limit", "Not logged in", "usage limit")):
             print("  [limit -> sleep 30m]", flush=True)
             time.sleep(1800)
