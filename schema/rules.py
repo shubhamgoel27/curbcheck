@@ -103,7 +103,8 @@ def can_park(stack: SignStack, when: datetime, permit_areas: frozenset[str] = fr
     verdicts.sort(key=lambda a: SEVERITY.index(a.verdict))
     best = verdicts[0]
     if best.verdict is Verdict.LIMITED:
-        # multiple limits: strictest applies
-        limits = [a.limit_minutes for a in verdicts if a.verdict is Verdict.LIMITED]
-        best.limit_minutes = min(limits)
+        # multiple limits: strictest applies. Tolerate None (malformed model reads).
+        limits = [a.limit_minutes for a in verdicts
+                  if a.verdict is Verdict.LIMITED and a.limit_minutes is not None]
+        best.limit_minutes = min(limits) if limits else None
     return best
