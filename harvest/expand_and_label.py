@@ -108,9 +108,22 @@ def main():
     items = [it for it in wl if it["id"] not in done]
     print(f"worklist: {len(items)} new images ({len(done)} already done)", flush=True)
 
-    # download
-    for it in items:
-        save_image(it["url"], IMG / f"{it['id']}.jpg")
+    # download in parallel with a tight per-URL timeout; skip stragglers
+    def dl(it):
+        dest = IMG / f"{it['id']}.jpg"
+        if dest.exists() and dest.stat().st_size > 0:
+            return
+        try:
+            req = urllib.request.Request(it["url"], headers=UA)
+            data = urllib.request.urlopen(req, timeout=20).read()
+            if data[:3] == b"\xff\xd8\xff" or data[:4] == b"\x89PNG":
+                dest.write_bytes(data)
+        except Exception:
+            pass
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        for i, _ in enumerate(ex.map(dl, items), 1):
+            if i % 200 == 0:
+                print(f"  downloaded {i}/{len(items)}", flush=True)
     items = [it for it in items if (IMG / f"{it['id']}.jpg").exists()]
     print(f"downloaded/cached: {len(items)}", flush=True)
 
