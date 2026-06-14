@@ -68,6 +68,20 @@ def load_real_negatives(limit: int) -> list[dict]:
     return out[:limit]
 
 
+def load_human() -> dict[str, dict]:
+    """Human labels (from the labeler tool) keyed by image path. Highest quality:
+    they OVERRIDE Opus for the same image. parse_ok=False (illegible) is dropped."""
+    out = {}
+    f = ROOT / "data/real_train/human_labels.jsonl"
+    if not f.exists():
+        return out
+    for r in map(json.loads, f.open()):
+        if not r.get("parse_ok"):
+            continue  # illegible -> exclude from training entirely
+        out[r["image"]] = r["label"]  # may be [] (a clean negative)
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--real-frac", type=float, default=0.25,
@@ -77,7 +91,18 @@ def main() -> None:
     args = ap.parse_args()
 
     synth = load_synth()
+    human = load_human()
     real_pos = load_real()
+    # human labels override Opus for the same image (and add new ones)
+    if human:
+        real_pos = [r for r in real_pos if r["image"] not in
+                    {str(ROOT / p) for p in human}]
+        for img, lab in human.items():
+            if lab:  # non-empty human label -> training example
+                real_pos.append({"image": str(ROOT / img), "task": "read",
+                                 "prompt": READ_PROMPT, "response": json.dumps(lab),
+                                 "domain": "real"})
+        print(f"human labels applied: {len(human)} (override Opus)")
     # solve for counts: real = frac * (synth + real)  ->  real = frac/(1-frac) * synth
     target_real = int(args.real_frac / (1 - args.real_frac) * len(synth))
     n_neg = min(int(target_real * args.neg_frac), len(load_real_negatives(10_000)))
