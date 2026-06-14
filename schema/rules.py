@@ -93,7 +93,9 @@ def can_park(stack: SignStack, when: datetime, permit_areas: frozenset[str] = fr
             verdicts.append(Answer(Verdict.LIMITED, limit_minutes=r.limit_minutes,
                                    reason=f"{r.limit_minutes}min limit"))
         elif r.kind is Kind.PERMIT_EXEMPT_LIMIT:
-            if r.permit_area in permit_areas:
+            # permit_area must be a hashable scalar; malformed model output (e.g. a list)
+            # is treated as "no matching permit"
+            if isinstance(r.permit_area, str) and r.permit_area in permit_areas:
                 verdicts.append(Answer(Verdict.OK, reason=f"permit {r.permit_area} exempts"))
             else:
                 verdicts.append(Answer(Verdict.LIMITED, limit_minutes=r.limit_minutes,

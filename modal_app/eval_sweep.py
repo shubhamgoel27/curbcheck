@@ -35,7 +35,7 @@ MODELS = {
 
 
 @app.function(image=image, gpu="A10G", volumes={"/data": vol},
-              secrets=[modal.Secret.from_name("huggingface")], timeout=60 * 60)
+              secrets=[modal.Secret.from_name("huggingface")], timeout=3 * 60 * 60)
 def run_model(model_key: str, dataset: str = "synth"):
     import json
     import re
