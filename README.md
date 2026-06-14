@@ -37,7 +37,7 @@ Turns out the off-the-shelf one can't. But you can teach it, for about four doll
 
 <p align="center"><img src="docs/assets/results.png" width="680" alt="Bar chart: base vs tuned model on Read F1 and Reason accuracy"></p>
 
-A stock Qwen2.5-VL-3B scores **0.15** on "can I park here right now" — *below* the 0.25 you'd
+A stock Qwen2.5-VL-3B scores **0.15** on "can I park here right now", *below* the 0.25 you'd
 get by guessing among four verdicts. One QLoRA run on synthetic + teacher-labeled data, ~$4 of
 GPU, takes it to **0.76 reasoning** and **0.96 read accuracy**.
 
@@ -87,13 +87,13 @@ benchmark's Read metric are literally the same thing.
 
 curbcheck is four artifacts:
 
-1. **The exam** — a benchmark of parking-sign images with exact ground truth and three
+1. **The exam**: a benchmark of parking-sign images with exact ground truth and three
    question layers: **read** (extract rules to JSON), **reason** (can I park at 5:30pm?),
    **abstain** (signs alone can't tell, say so).
-2. **The report card** — a leaderboard of small VLMs vs a frontier reference, scored by sign
+2. **The report card**: a leaderboard of small VLMs vs a frontier reference, scored by sign
    count.
-3. **The student** — a QLoRA-tuned 3B model (the result above).
-4. **The demo** — photo in, week-grid out *(coming soon)*.
+3. **The student**: a QLoRA-tuned 3B model (the result above).
+4. **The demo**: photo in, week-grid out *(coming soon)*.
 
 ### Where the data comes from
 
