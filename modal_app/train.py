@@ -49,7 +49,7 @@ MODEL = "unsloth/Qwen2.5-VL-3B-Instruct-bnb-4bit"
     ],
     timeout=4 * 60 * 60,
 )
-def train(smoke: bool = False):
+def train(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = False):
     import json
     import os
     from pathlib import Path
@@ -80,8 +80,9 @@ def train(smoke: bool = False):
         return real_index.get(name, p)
 
     rows = [json.loads(l) for l in open("/data/train.jsonl")]
-    if smoke:
-        rows = rows[:64]
+    if smoke or probe:
+        # probe uses the LARGEST real images so peak VRAM is worst-case, not average
+        rows = sorted(rows, key=lambda r: 0 if r["domain"] == "real" else 1)[:64]
 
     # plain list of message dicts with PIL images embedded (the Unsloth-vision contract)
     def to_msg(r):
@@ -106,11 +107,12 @@ def train(smoke: bool = False):
     )
     FastVisionModel.for_training(model)
 
+    import torch
     cfg = SFTConfig(
-        per_device_train_batch_size=2,
-        gradient_accumulation_steps=4,
-        warmup_steps=5 if smoke else 10,
-        max_steps=30 if smoke else -1,
+        per_device_train_batch_size=batch,
+        gradient_accumulation_steps=accum,
+        warmup_steps=5 if (smoke or probe) else 10,
+        max_steps=8 if probe else (30 if smoke else -1),
         num_train_epochs=2,
         learning_rate=1e-4,
         logging_steps=5,
@@ -133,6 +135,14 @@ def train(smoke: bool = False):
     )
     trainer.train()
 
+    peak = torch.cuda.max_memory_allocated() / 1e9
+    total = torch.cuda.get_device_properties(0).total_memory / 1e9
+    print(f"\n>>> PEAK VRAM: {peak:.1f} GB / {total:.0f} GB  "
+          f"(batch={batch}, accum={accum}, eff={batch*accum}, {peak/total:.0%} used)")
+
+    if probe:
+        print(">>> probe only, not saving")
+        return
     out = "/data/runs/qwen25vl3b/final"
     model.save_pretrained(out)
     processor.save_pretrained(out)
@@ -141,5 +151,5 @@ def train(smoke: bool = False):
 
 
 @app.local_entrypoint()
-def main(smoke: bool = False):
-    train.remote(smoke=smoke)
+def main(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = False):
+    train.remote(smoke=smoke, batch=batch, accum=accum, probe=probe)
