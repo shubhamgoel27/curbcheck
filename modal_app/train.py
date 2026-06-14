@@ -67,12 +67,12 @@ def train(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = Fa
     # ---- resolve Mac-side image paths to volume paths ----
     # build a name->path index once over the real-image subdirs
     real_index = {}
-    real_root = Path("/data/real_images")
-    if real_root.exists():
-        for sub in real_root.iterdir():
-            if sub.is_dir():
-                for f in sub.glob("*.jpg"):
-                    real_index[f.name] = str(f)
+    for root in (Path("/data/real_images"), Path("/data/real_images_v3")):
+        if not root.exists():
+            continue
+        # v1 reals are nested in subdirs; v3 reals are flat
+        for f in root.rglob("*.jpg"):
+            real_index[f.name] = str(f)
 
     def fix(p: str) -> str:
         name = p.rsplit("/", 1)[-1]
