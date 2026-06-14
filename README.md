@@ -15,14 +15,15 @@
 
 ## A $160 origin story
 
-I spent a week in San Francisco in April 2026. I came home with good memories and **two
-parking tickets**, both for the same reason: I stood in front of a pole holding four signs,
-read all four, and *still* could not work out whether I was allowed to leave my car there.
+I spent a week in San Francisco in April 2026, up from San Jose. I came back with good
+memories and **two parking tickets**, both for the same reason: I stood in front of a pole
+holding four signs, read all four, and *still* could not work out whether I was allowed to
+leave my car there.
 
 You know the pole. A 2-hour limit. *Except* with an Area S permit. *Except* it's also a
 street-cleaning zone Tuesday mornings. *Also* tow-away during evening rush. Each sign is
-legible alone. Stacked, they form a little logic puzzle with a time variable, and my
-jet-lagged, double-parked brain did not solve it. Twice.
+legible alone. Stacked, they form a little logic puzzle with a time variable that my brain,
+mid-errand and already late, refused to solve. Twice.
 
 The maddening part: every fact you need is printed right there. It is pure perception plus
 rule-logic plus a clock. So, the question:
