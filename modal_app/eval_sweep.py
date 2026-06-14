@@ -18,7 +18,7 @@ image = (
     .pip_install(
         "transformers>=4.49.0", "accelerate>=1.2.0", "pillow>=10.0.0",
         "torch>=2.5.0", "qwen-vl-utils", "einops", "torchvision",
-        "peft>=0.14.0", "bitsandbytes>=0.45.0",
+        "peft>=0.14.0", "bitsandbytes>=0.45.0", "num2words",
     )
 )
 
@@ -53,13 +53,16 @@ def run_model(model_key: str):
         from qwen_vl_utils import process_vision_info
         is_adapter = Path(hf_id).exists() and (Path(hf_id) / "adapter_config.json").exists()
         if is_adapter:
-            import json as _json
             from peft import PeftModel
-            base_id = _json.load(open(Path(hf_id) / "adapter_config.json"))["base_model_name_or_path"]
-            proc = AutoProcessor.from_pretrained(hf_id)  # tuned processor saved alongside
+            # load the official (non-quantized) base, apply the LoRA adapter, no merge
+            # (the adapter was trained on the unsloth 4-bit base; merging a quantized
+            #  base asserts, so we keep the PeftModel wrapper for inference)
+            base_id = "Qwen/Qwen2.5-VL-3B-Instruct"
+            proc = AutoProcessor.from_pretrained(base_id)
             base = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                 base_id, torch_dtype=torch.bfloat16, device_map="cuda")
-            model = PeftModel.from_pretrained(base, hf_id).merge_and_unload()
+            model = PeftModel.from_pretrained(base, hf_id)
+            model.eval()
         else:
             proc = AutoProcessor.from_pretrained(hf_id)
             model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
