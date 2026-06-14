@@ -31,6 +31,7 @@ MODELS = {
     "moondream": ("vikhyatk/moondream2", "auto"),
     "tuned": ("/data/runs/qwen25vl3b/final", "qwen"),  # v1 student
     "tuned_v2": ("/data/runs/qwen25vl3b_v2/final", "qwen"),  # rebalanced student
+    "tuned_v3": ("/data/runs/qwen25vl3b_v3/final", "qwen"),  # rebalanced + realism + v3-labels
 }
 
 
@@ -195,7 +196,7 @@ def run_model(model_key: str, dataset: str = "synth"):
             pv = can_park(stack, probe).verdict.value
             pipe_tot += 1; pipe_hit += int(pv == gold)
             by_n[n]["pipe"].append(int(pv == gold))
-            if model_key in ("qwen3b", "tuned"):  # keep audit trail for the headline models
+            if model_key in ("qwen3b", "tuned", "tuned_v3"):  # keep audit trail for the headline models
                 records.append({"image": s["image"].split("/")[-1], "n_signs": n,
                                 "probe": q["probe"], "gold": gold,
                                 "e2e_verdict": v, "e2e_parsed_json": ok,
