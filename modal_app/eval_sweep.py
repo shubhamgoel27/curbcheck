@@ -29,7 +29,8 @@ MODELS = {
     "qwen7b": ("Qwen/Qwen2.5-VL-7B-Instruct", "qwen"),
     "smolvlm": ("HuggingFaceTB/SmolVLM2-2.2B-Instruct", "auto"),
     "moondream": ("vikhyatk/moondream2", "auto"),
-    "tuned": ("/data/runs/qwen25vl3b/final", "qwen"),  # the student, if present
+    "tuned": ("/data/runs/qwen25vl3b/final", "qwen"),  # v1 student
+    "tuned_v2": ("/data/runs/qwen25vl3b_v2/final", "qwen"),  # rebalanced student
 }
 
 
