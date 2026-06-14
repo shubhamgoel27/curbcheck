@@ -36,7 +36,7 @@ MODELS = {
 
 @app.function(image=image, gpu="A10G", volumes={"/data": vol},
               secrets=[modal.Secret.from_name("huggingface")], timeout=60 * 60)
-def run_model(model_key: str):
+def run_model(model_key: str, dataset: str = "synth"):
     import json
     import re
     from pathlib import Path
@@ -48,7 +48,9 @@ def run_model(model_key: str):
     if model_key == "tuned" and not Path(hf_id).exists():
         return {"model": model_key, "skipped": "adapter not on volume yet"}
 
-    samples = [json.loads(l) for l in open("/data/eval_samples.jsonl")]
+    samp_file = "/data/eval_samples.jsonl" if dataset == "synth" else "/data/real_eval_samples.jsonl"
+    img_dir = "/data/eval_images" if dataset == "synth" else "/data/real_eval_images"
+    samples = [json.loads(l) for l in open(samp_file)]
 
     if kind == "qwen":
         from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
@@ -159,7 +161,7 @@ def run_model(model_key: str):
     records = []
 
     for s in samples:
-        img = f"/data/eval_images/{s['image'].split('/')[-1]}"
+        img = f"{img_dir}/{s['image'].split('/')[-1]}"
         n = s["n_signs"]
         by_n.setdefault(n, {"r": [], "e2e": [], "pipe": []})
         # READ once, reuse for the pipeline verdict
@@ -225,9 +227,9 @@ def run_model(model_key: str):
 
 
 @app.local_entrypoint()
-def main(models: str = "qwen3b,smolvlm,tuned"):
+def main(models: str = "qwen3b,smolvlm,tuned", dataset: str = "synth"):
     keys = [m.strip() for m in models.split(",")]
-    raw = list(run_model.map(keys, return_exceptions=True))
+    raw = list(run_model.starmap([(k, dataset) for k in keys], return_exceptions=True))
     results = []
     for k, r in zip(keys, raw):
         if isinstance(r, Exception):
