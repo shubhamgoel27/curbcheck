@@ -113,7 +113,8 @@ def run_model(model_key: str, dataset: str = "synth"):
                 days = frozenset(Day[str(d)[:3].upper()] for d in (r.get("days") or []))
                 sh, sm = map(int, str(r["start"]).split(":"))
                 eh, em = map(int, str(r["end"]).split(":"))
-                out.append(Restriction(kind, Window(days, dtime(sh, sm), dtime(eh, em)),
+                wk = frozenset(int(x) for x in (r.get("weeks") or []))
+                out.append(Restriction(kind, Window(days, dtime(sh, sm), dtime(eh, em), weeks=wk),
                                        limit_minutes=r.get("limit_minutes"),
                                        permit_area=r.get("permit_area"), tow=bool(r.get("tow"))))
             except Exception:
@@ -155,7 +156,8 @@ def run_model(model_key: str, dataset: str = "synth"):
         if k == "time_limit" and r.get("permit_area"):
             k = "permit_limit"
         return (k, frozenset(str(d)[:3].upper() for d in (r.get("days") or [])),
-                str(r.get("start", "")), str(r.get("end", "")))
+                str(r.get("start", "")), str(r.get("end", "")),
+                frozenset(int(x) for x in (r.get("weeks") or [])))
 
     read_f1, by_n = [], {}
     e2e_hit = e2e_tot = pipe_hit = pipe_tot = parse_ok = parse_tot = 0

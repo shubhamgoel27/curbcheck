@@ -31,7 +31,8 @@ def build_stack(label) -> SignStack:
             days = frozenset(Day[str(d)[:3].upper()] for d in (r.get("days") or []))
             sh, sm = map(int, str(r["start"]).split(":"))
             eh, em = map(int, str(r["end"]).split(":"))
-            out.append(Restriction(kind, Window(days, time(sh, sm), time(eh, em)),
+            wk = frozenset(int(x) for x in (r.get("weeks") or []))
+            out.append(Restriction(kind, Window(days, time(sh, sm), time(eh, em), weeks=wk),
                                    limit_minutes=r.get("limit_minutes"),
                                    permit_area=r.get("permit_area"), tow=bool(r.get("tow"))))
         except Exception:

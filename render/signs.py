@@ -66,13 +66,18 @@ def fmt_days(days: frozenset[Day]) -> str:
     return " & ".join(DAY_ABBR[d] for d in ordered)
 
 
+ORD = {1: "1ST", 2: "2ND", 3: "3RD", 4: "4TH", 5: "5TH"}
+
+
 def plate_lines(r: Restriction) -> list[tuple[str, tuple, float]]:
     """(text, color, relative size) lines for one sign plate."""
     w = r.window
     span = f"{fmt_time(w.start)} TO {fmt_time(w.end)}"
     days = fmt_days(w.days)
+    if w.weeks:  # "2ND & 4TH MON" style
+        days = " & ".join(ORD[n] for n in sorted(w.weeks)) + " " + days
     if r.kind is Kind.STREET_CLEANING:
-        return [("NO PARKING", RED, 1.0), (span, BLACK, 0.72), (days, BLACK, 0.72),
+        return [("NO PARKING", RED, 1.0), (span, BLACK, 0.72), (days, BLACK, 0.66),
                 ("STREET CLEANING", RED, 0.55)]
     if r.kind is Kind.NO_PARKING:
         if len(w.days) == 7 and w.start == time(0) and w.end == time(23, 59):
@@ -134,7 +139,11 @@ def rand_window(rng: random.Random, kind: Kind) -> Window:
         start_h = rng.choice([6, 7, 8, 9, 10, 12])
         day_opts = [frozenset({d}) for d in Day] + [frozenset({Day.TUE, Day.THU}),
                                                     frozenset({Day.MON, Day.WED, Day.FRI})]
-        return Window(rng.choice(day_opts), time(start_h), time(start_h + 2))
+        # ~30% of SF cleaning signs are nth-of-month ("2nd & 4th Monday")
+        weeks = rng.choice([frozenset(), frozenset(), frozenset(),
+                            frozenset({1, 3}), frozenset({2, 4}), frozenset({1, 3, 5})])
+        day = rng.choice([frozenset({d}) for d in Day]) if weeks else rng.choice(day_opts)
+        return Window(day, time(start_h), time(start_h + 2), weeks=weeks)
     if kind in (Kind.NO_STOPPING, Kind.TOW_AWAY):
         start_h, dur = rng.choice([(7, 2), (15, 3), (16, 2), (16, 3)])
         return Window(WEEKDAYS, time(start_h), time(start_h + dur))

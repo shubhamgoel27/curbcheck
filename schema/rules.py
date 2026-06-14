@@ -40,9 +40,16 @@ class Window:
     days: frozenset[Day]
     start: time
     end: time
+    weeks: frozenset[int] = frozenset()  # which weeks of the month (1-5); empty = every week
 
     def contains(self, dt: datetime) -> bool:
-        return Day(dt.weekday()) in self.days and self.start <= dt.time() < self.end
+        if Day(dt.weekday()) not in self.days or not (self.start <= dt.time() < self.end):
+            return False
+        if self.weeks:  # "2nd & 4th Monday" style: nth occurrence of the weekday in the month
+            week_of_month = (dt.day - 1) // 7 + 1
+            if week_of_month not in self.weeks:
+                return False
+        return True
 
 
 @dataclass(frozen=True)

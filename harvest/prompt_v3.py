@@ -20,6 +20,7 @@ Step 2. For every PARKING-related sign, produce one JSON object:
   "limit_minutes": integer or null,
   "permit_area": single letter or null,
   "tow": true if the sign threatens towing else false,
+  "weeks": list of which weeks of the month it applies, e.g. [2,4] for "2nd & 4th MONDAY"; null for every week,
   "confidence": "high" if every field is clearly legible, else "low"
 }
 
@@ -30,6 +31,7 @@ Rules:
 - "NO PARKING ANY TIME" / "TOW AWAY NO STOPPING ANY TIME" -> days all seven, start 00:00, end 23:59.
 - Calendar dates (e.g. 6/17/26) -> convert to the matching weekday(s) in days.
 - A day range "MON THRU FRI" -> all five weekdays. "TUE & THU" -> those two.
+- "2nd & 4th MONDAY" / "1st & 3rd TUE" -> days has the weekday, weeks = [2,4] / [1,3].
 - If a field is present on the sign but you cannot read it, set it null and confidence "low".
 - Do NOT emit an object unless at least one of days/start/end is legible.
 - Ignore non-parking signs entirely.

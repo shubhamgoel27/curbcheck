@@ -40,6 +40,7 @@ def restriction_to_json(r) -> dict:
         "limit_minutes": r.limit_minutes,
         "permit_area": r.permit_area,
         "tow": r.tow,
+        "weeks": sorted(r.window.weeks) or None,
     }
 
 
@@ -47,7 +48,8 @@ READ_PROMPT = """Look at the parking sign stack in this image. Extract EVERY sig
 Each element: {"kind": one of [no_parking, no_stopping, tow_away, time_limit, permit_limit, street_cleaning, loading_only] (use permit_limit when the sign has a permit exemption like EXCEPT AREA X PERMIT, time_limit otherwise),
 "days": list like ["MON","TUE"...] (the days the restriction applies),
 "start": "HH:MM" 24h, "end": "HH:MM" 24h,
-"limit_minutes": int or null, "permit_area": letter or null, "tow": true/false}.
+"limit_minutes": int or null, "permit_area": letter or null, "tow": true/false,
+"weeks": list of which weeks of the month it applies like [2,4] for "2nd & 4th MONDAY", or null for every week}.
 Respond with ONLY the JSON array, nothing else."""
 
 REASON_PROMPT = """Look at the parking sign stack in this image. It is {when}. You have no parking permits.

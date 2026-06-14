@@ -65,7 +65,7 @@ function curRec(){ return store[curImg().image] || null; }
 
 function setRec(rec){ store[curImg().image] = rec; localStorage.setItem(LS, JSON.stringify(store)); render(); }
 
-function blankSign(){ return {kind:"time_limit",days:[],start:"",end:"",limit_minutes:null,permit_area:null,tow:false,confidence:"high"}; }
+function blankSign(){ return {kind:"time_limit",days:[],start:"",end:"",limit_minutes:null,permit_area:null,tow:false,weeks:[],confidence:"high"}; }
 
 function ensureRec(){
   let r = curRec();
@@ -115,7 +115,10 @@ function signCard(s,i){
     <div class="inl" style="margin-top:11px">
       <div class="fld"><label>Tow-away</label><span class="opt tow ${s.tow?'on':''}" data-tow>${s.tow?'YES':'no'}</span></div>
       <div class="fld"><label>Confidence</label><span class="opt conf ${s.confidence==='low'?'on':''}" data-conf>${s.confidence}</span></div>
-    </div>`;
+    </div>
+    <div class="fld" style="margin-top:11px"><label>Weeks of month (only if sign says e.g. "2nd &amp; 4th")</label><div class="opts">${
+      [1,2,3,4,5].map(w=>`<span class="opt wk ${s.weeks.includes(w)?'on':''}" data-wk="${w}">${w}${({1:'st',2:'nd',3:'rd'}[w]||'th')}</span>`).join("")}
+      <span class="opt" data-wkq="every">every week</span></div></div>`;
   const r=ensureRec();
   el.querySelector(".rm").onclick=()=>{ r.signs.splice(i,1); setRec(r); };
   el.querySelectorAll("[data-kind]").forEach(o=>o.onclick=()=>{ s.kind=o.dataset.kind; setRec(r); });
@@ -129,6 +132,8 @@ function signCard(s,i){
   const pm=el.querySelector(".permit"); if(pm)pm.onchange=e=>{ s.permit_area=e.target.value.toUpperCase()||null; setRec(r); };
   el.querySelector(".tow").onclick=()=>{ s.tow=!s.tow; setRec(r); };
   el.querySelector(".conf").onclick=()=>{ s.confidence=s.confidence==="high"?"low":"high"; setRec(r); };
+  el.querySelectorAll("[data-wk]").forEach(o=>o.onclick=()=>{ const w=+o.dataset.wk; s.weeks.includes(w)?s.weeks.splice(s.weeks.indexOf(w),1):s.weeks.push(w); setRec(r); });
+  el.querySelectorAll("[data-wkq]").forEach(o=>o.onclick=()=>{ s.weeks=[]; setRec(r); });
   return el;
 }
 
@@ -136,7 +141,9 @@ function exportRecord(path){
   const r = store[path]; if(!r) return null;
   if(r.status==="empty") return {image:path, source:"human", parse_ok:true, n_signs:0, label:[]};
   if(r.status==="illegible") return {image:path, source:"human", parse_ok:false, n_signs:0, label:null};
-  const label=(r.signs||[]).filter(s=>s.days.length||s.start||s.end);
+  const label=(r.signs||[]).filter(s=>s.days.length||s.start||s.end)
+    .map(s=>({kind:s.kind,days:s.days,start:s.start,end:s.end,limit_minutes:s.limit_minutes,
+              permit_area:s.permit_area,tow:s.tow,weeks:s.weeks&&s.weeks.length?s.weeks.slice().sort():null}));
   return {image:path, source:"human", parse_ok:true, n_signs:label.length, label};
 }
 
@@ -145,7 +152,7 @@ function markEmpty(){ setRec({status:"empty"}); next(); }
 function markIllegible(){ setRec({status:"illegible"}); next(); }
 function prefill(){ const r=ensureRec(); r.status="editing";
   r.signs=(curImg().opus||[]).map(s=>({kind:s.kind,days:s.days||[],start:s.start||"",end:s.end||"",
-    limit_minutes:s.limit_minutes??null,permit_area:s.permit_area||null,tow:!!s.tow,confidence:"high"})); setRec(r); }
+    limit_minutes:s.limit_minutes??null,permit_area:s.permit_area||null,tow:!!s.tow,weeks:s.weeks||[],confidence:"high"})); setRec(r); }
 function saveNext(){ const r=ensureRec(); if(r.status==="editing") r.status="done"; setRec(r); next(); }
 function next(){ if(idx<IMAGES.length-1){idx++; render();} }
 function prev(){ if(idx>0){idx--; render();} }
