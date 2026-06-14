@@ -20,6 +20,7 @@ image = (
         "torch>=2.5.0", "qwen-vl-utils", "einops", "torchvision",
         "peft>=0.14.0", "bitsandbytes>=0.45.0", "num2words",
     )
+    .add_local_file("schema/rules.py", "/root/rules.py", copy=True)
 )
 
 # model_key -> (hf_id, loader_kind)
@@ -91,7 +92,31 @@ def run_model(model_key: str):
             out = model.generate(**inp, max_new_tokens=400)
             return proc.decode(out[0][inp.input_ids.shape[1]:], skip_special_tokens=True)
 
-    # ---- scoring (mirrors eval/claude_baseline.py) ----
+    # ---- the resolver (the deterministic logic engine), imported from the repo ----
+    import sys
+    sys.path.insert(0, "/root")
+    from datetime import datetime, time as dtime
+    from rules import Restriction, Window, SignStack, Kind, Day, can_park
+
+    def build_stack(read_json):
+        """Reconstruct a SignStack from a model's READ output, skipping malformed rows."""
+        out = []
+        for r in read_json if isinstance(read_json, list) else []:
+            if not isinstance(r, dict):
+                continue
+            try:
+                kind = Kind(str(r["kind"]).lower().replace("-", "_"))
+                days = frozenset(Day[str(d)[:3].upper()] for d in (r.get("days") or []))
+                sh, sm = map(int, str(r["start"]).split(":"))
+                eh, em = map(int, str(r["end"]).split(":"))
+                out.append(Restriction(kind, Window(days, dtime(sh, sm), dtime(eh, em)),
+                                       limit_minutes=r.get("limit_minutes"),
+                                       permit_area=r.get("permit_area"), tow=bool(r.get("tow"))))
+            except Exception:
+                continue
+        return SignStack(out)
+
+    # ---- scoring ----
     dec = json.JSONDecoder()
 
     def extract(t):
@@ -104,6 +129,23 @@ def run_model(model_key: str):
                     continue
         return None
 
+    VERDICTS = ("tow_risk", "limited", "ok", "no")
+
+    def extract_verdict(t):
+        """Lenient: JSON verdict first, then prose keywords. Returns (verdict|None, parsed_ok)."""
+        obj = extract(t)
+        if isinstance(obj, dict) and obj.get("verdict"):
+            v = str(obj["verdict"]).lower().replace("-", "_").replace(" ", "_")
+            if v in VERDICTS:
+                return v, True
+        low = t.lower()
+        # generous prose mapping, in severity order so "tow" wins over "no"
+        if "tow" in low: return "tow_risk", False
+        if "limited" in low or "hour" in low or "minute" in low: return "limited", False
+        if any(p in low for p in ("cannot park", "can't park", "not allowed", "no parking", "prohibited")): return "no", False
+        if any(p in low for p in ("you can park", "allowed to park", "free to park", '"ok"', "verdict: ok")): return "ok", False
+        return None, False
+
     def nkey(r):
         k = str(r.get("kind", "")).lower().replace("-", "_")
         if k == "time_limit" and r.get("permit_area"):
@@ -111,35 +153,72 @@ def run_model(model_key: str):
         return (k, frozenset(str(d)[:3].upper() for d in (r.get("days") or [])),
                 str(r.get("start", "")), str(r.get("end", "")))
 
-    read_f1, reason_hit, reason_tot = [], 0, 0
-    by_n = {}
+    read_f1, by_n = [], {}
+    e2e_hit = e2e_tot = pipe_hit = pipe_tot = parse_ok = parse_tot = 0
+    records = []
+
     for s in samples:
         img = f"/data/eval_images/{s['image'].split('/')[-1]}"
+        n = s["n_signs"]
+        by_n.setdefault(n, {"r": [], "e2e": [], "pipe": []})
+        # READ once, reuse for the pipeline verdict
+        read_q = next(q for q in s["questions"] if q["type"] == "read")
+        read_raw = infer(read_q["prompt"], img)
+        read_pred = extract(read_raw)
+        if isinstance(read_pred, list):
+            p = {nkey(x) for x in read_pred if isinstance(x, dict)}
+            g = {nkey(x) for x in read_q["gold"]}
+            tp = len(p & g)
+            pr = tp / len(p) if p else 0
+            rc = tp / len(g) if g else 0
+            f1 = 2 * pr * rc / (pr + rc) if pr + rc else 0
+        else:
+            f1 = 0.0
+        read_f1.append(f1); by_n[n]["r"].append(f1)
+        stack = build_stack(read_pred)
+
         for q in s["questions"]:
-            pred = extract(infer(q["prompt"], img))
-            n = s["n_signs"]
-            by_n.setdefault(n, {"r": [], "v": []})
-            if q["type"] == "read":
-                if isinstance(pred, list):
-                    p = {nkey(x) for x in pred if isinstance(x, dict)}
-                    g = {nkey(x) for x in q["gold"]}
-                    tp = len(p & g)
-                    pr = tp / len(p) if p else 0
-                    rc = tp / len(g) if g else 0
-                    f1 = 2 * pr * rc / (pr + rc) if pr + rc else 0
-                else:
-                    f1 = 0.0
-                read_f1.append(f1); by_n[n]["r"].append(f1)
-            else:
-                ok = isinstance(pred, dict) and str(pred.get("verdict", "")).lower() == q["gold"]["verdict"]
-                reason_tot += 1; reason_hit += int(ok); by_n[n]["v"].append(int(ok))
+            if q["type"] != "reason":
+                continue
+            raw = infer(q["prompt"], img)
+            v, ok = extract_verdict(raw)
+            gold = q["gold"]["verdict"]
+            # end-to-end: the model does perception + logic itself
+            e2e_tot += 1; e2e_hit += int(v == gold)
+            parse_tot += 1; parse_ok += int(ok)
+            by_n[n]["e2e"].append(int(v == gold))
+            # pipeline: the model's READ -> deterministic resolver
+            probe = datetime.fromisoformat(q["probe"])
+            pv = can_park(stack, probe).verdict.value
+            pipe_tot += 1; pipe_hit += int(pv == gold)
+            by_n[n]["pipe"].append(int(pv == gold))
+            if model_key in ("qwen3b", "tuned"):  # keep audit trail for the headline models
+                records.append({"image": s["image"].split("/")[-1], "n_signs": n,
+                                "probe": q["probe"], "gold": gold,
+                                "e2e_verdict": v, "e2e_parsed_json": ok,
+                                "pipeline_verdict": pv, "e2e_raw": raw[:200]})
+
+    # persist the audit trail to the volume
+    if records:
+        import pathlib
+        pathlib.Path("/data/results").mkdir(parents=True, exist_ok=True)
+        with open(f"/data/results/{model_key}_records.jsonl", "w") as f:
+            for r in records:
+                f.write(json.dumps(r) + "\n")
+        vol.commit()
+
+    def rate(h, t):
+        return round(h / t, 3) if t else None
 
     return {
         "model": model_key, "hf_id": hf_id,
-        "read_f1": round(sum(read_f1) / len(read_f1), 3) if read_f1 else None,
-        "reason_acc": round(reason_hit / reason_tot, 3) if reason_tot else None,
+        "read_f1": rate(sum(read_f1) * 1, len(read_f1)) if read_f1 else None,
+        "reason_e2e": rate(e2e_hit, e2e_tot),
+        "reason_pipeline": rate(pipe_hit, pipe_tot),
+        "verdict_parse_rate": rate(parse_ok, parse_tot),
         "by_signs": {n: {"read_f1": round(sum(d["r"]) / len(d["r"]), 3) if d["r"] else None,
-                         "reason_acc": round(sum(d["v"]) / len(d["v"]), 3) if d["v"] else None}
+                         "e2e": round(sum(d["e2e"]) / len(d["e2e"]), 3) if d["e2e"] else None,
+                         "pipe": round(sum(d["pipe"]) / len(d["pipe"]), 3) if d["pipe"] else None}
                      for n, d in sorted(by_n.items())},
     }
 
@@ -155,14 +234,15 @@ def main(models: str = "qwen3b,smolvlm,tuned"):
         else:
             results.append(r)
     print("\n=== curbcheck leaderboard ===")
-    print(f"{'model':<12} {'read F1':>8} {'reason':>8}")
+    print(f"{'model':<12} {'read F1':>8} {'reason(e2e)':>12} {'reason(pipe)':>13} {'parse%':>8}")
     for r in results:
         if r.get("error"):
             print(f"{r['model']:<12}  ERROR: {r['error']}")
         elif r.get("skipped"):
             print(f"{r['model']:<12}  skipped: {r['skipped']}")
         else:
-            print(f"{r['model']:<12} {r['read_f1']!s:>8} {r['reason_acc']!s:>8}")
+            print(f"{r['model']:<12} {r['read_f1']!s:>8} {r['reason_e2e']!s:>12} "
+                  f"{r['reason_pipeline']!s:>13} {r['verdict_parse_rate']!s:>8}")
     import json
     from pathlib import Path
     Path("/tmp/curbcheck_leaderboard.json").write_text(json.dumps(results, indent=1))
