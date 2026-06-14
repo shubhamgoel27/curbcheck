@@ -37,12 +37,23 @@ def load_synth() -> list[dict]:
 
 def load_real() -> list[dict]:
     out = []
+    # v1 labels (no confidence flag; treat all as usable)
     for r in map(json.loads, (ROOT / "data/real_train/pseudo_labels.jsonl").open()):
-        if not r["parse_ok"] or r["n_signs"] == 0:
-            continue  # negatives handled separately below
-        out.append({"image": str(ROOT / r["image"]), "task": "read",
-                    "prompt": READ_PROMPT, "response": json.dumps(r["label"]),
-                    "domain": "real"})
+        if r["parse_ok"] and r["n_signs"] > 0:
+            out.append({"image": str(ROOT / r["image"]), "task": "read",
+                        "prompt": READ_PROMPT, "response": json.dumps(r["label"]),
+                        "domain": "real"})
+    # v3 labels: use ONLY the high-confidence restrictions (cleaner truth)
+    v3 = ROOT / "data/real_train/pseudo_labels_v3.jsonl"
+    if v3.exists():
+        for r in map(json.loads, v3.open()):
+            hc = r.get("label_high_conf")
+            if r["parse_ok"] and hc:
+                # drop the confidence key from the training target
+                tgt = [{k: v for k, v in x.items() if k != "confidence"} for x in hc]
+                out.append({"image": str(ROOT / r["image"]), "task": "read",
+                            "prompt": READ_PROMPT, "response": json.dumps(tgt),
+                            "domain": "real"})
     return out
 
 

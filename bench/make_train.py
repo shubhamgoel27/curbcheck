@@ -35,6 +35,7 @@ from PIL import Image, ImageEnhance, ImageFilter  # noqa: E402
 
 from bench.generate import READ_PROMPT, REASON_PROMPT, restriction_to_json  # noqa: E402
 from render.signs import render_stack, sample_stack  # noqa: E402
+from render.realism import augment as realism_augment  # noqa: E402
 from schema.rules import Kind  # noqa: E402
 from schema.rules import can_park  # noqa: E402
 
@@ -74,6 +75,8 @@ def main() -> None:
     ap.add_argument("--n", type=int, default=2000)
     ap.add_argument("--rebalance", action="store_true",
                     help="oversample 3/4-sign stacks and tow_away/no_stopping signs")
+    ap.add_argument("--realism", type=float, default=0.0,
+                    help="fraction of train images to apply full realism augmentation to")
     args = ap.parse_args()
 
     # rebalanced distribution targets the measured weaknesses (4-sign + tow_risk recall)
@@ -95,7 +98,10 @@ def main() -> None:
                  if args.rebalance else sample_stack(rng))
         img = render_stack(stack, rng)
         if args.split == "train":
-            img = jitter(img, rng)
+            if rng.random() < args.realism:
+                img = realism_augment(img.convert("RGB"), rng)
+            else:
+                img = jitter(img, rng)
         name = f"{args.split}_{i:05d}.jpg"
         img.convert("RGB").save(img_dir / name, quality=88)
 
