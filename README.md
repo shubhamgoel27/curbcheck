@@ -5,7 +5,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/base_model-Qwen2.5--VL--3B-be1e2d">
   <img src="https://img.shields.io/badge/method-QLoRA-00693e">
-  <img src="https://img.shields.io/badge/training_cost-~%244-2b2521">
+  <img src="https://img.shields.io/badge/eval-synthetic%20%2B%20real%20SF%20photos-2b2521">
   <img src="https://img.shields.io/badge/license-MIT-9c9286">
 </p>
 
@@ -30,33 +30,40 @@ rule-logic plus a clock. So, the question:
 
 > **Can a small, cheap, runs-on-a-phone vision-language model do the thing my brain failed to do?**
 
-Turns out the off-the-shelf one can't. But you can teach it, for about four dollars.
+Turns out the off-the-shelf one can't. But you can teach it.
 
 ---
 
 ## The result
 
-<p align="center"><img src="docs/assets/results.png" width="680" alt="Bar chart: base vs tuned model on Read F1 and Reason accuracy"></p>
+<p align="center"><img src="docs/assets/results.png" width="680" alt="Bar chart: base vs QLoRA-tuned Qwen2.5-VL-3B on Read F1 and Reason accuracy"></p>
 
-A stock Qwen2.5-VL-3B scores **0.15** on "can I park here right now", *below* the 0.25 you'd
-get by guessing among four verdicts. One QLoRA run on synthetic + teacher-labeled data, ~$4 of
-GPU, takes it to **0.76 reasoning** and **0.96 read accuracy**.
+A stock Qwen2.5-VL-3B scores **0.16** on "can I park here right now", *below* the 0.25 you'd
+get by guessing among four verdicts. One QLoRA run on synthetic + teacher-labeled data takes it
+to **0.82 reasoning** and **0.98 read accuracy**.
 
 | Model | Read F1 | Reason accuracy |
 |---|:---:|:---:|
-| Qwen2.5-VL-3B (base) | 0.35 | 0.15 🪦 |
-| **Qwen2.5-VL-3B (tuned)** | **0.96** | **0.76** 🚀 |
+| Qwen2.5-VL-3B (base) | 0.34 | 0.16 🪦 |
+| **Qwen2.5-VL-3B (tuned)** | **0.98** | **0.82** 🚀 |
 
 And difficulty scales exactly the way the origin story predicts, with the number of signs on
 the pole:
 
 ```
 tuned model, reasoning accuracy by stack size
-  1 sign   ████████████████████  0.87
-  2 signs  ██████████████████    0.77
-  3 signs  ██████████████        0.60
-  4 signs  █████████             0.39   ← the pole that cost me two tickets
+  1 sign   ███████████████████   0.95
+  2 signs  ████████████████      0.80
+  3 signs  █████████████         0.67
+  4 signs  ███████████           0.56   ← the pole that cost me two tickets
 ```
+
+Those are synthetic-benchmark numbers. On **held-out real SF photos** the story is humbler, and
+I'd rather show it than hide it: tuning lifts read F1 from 0.04 to **0.34** and pipeline reasoning
+from 0.78 to **0.89**, but faded, sticker-covered, sun-bleached Mission Street poles are still far
+harder than clean renders. More real data and renderer realism barely moved reading, which says the
+sim-to-real gap is about model capacity, not data volume. That gap is the open problem, tracked
+honestly in [`docs/RESULTS.md`](docs/RESULTS.md).
 
 ---
 
@@ -127,7 +134,7 @@ docs/RESULTS.md        measured numbers
 ```bash
 uv venv && uv pip install pillow
 .venv/bin/python bench/generate.py --n 12          # build a tiny eval set
-.venv/bin/python -m modal run modal_app/train.py   # QLoRA on a rented A100 (~$4)
+.venv/bin/python -m modal run modal_app/train.py   # QLoRA on a rented A100
 .venv/bin/python -m modal run modal_app/eval_sweep.py
 ```
 

@@ -103,3 +103,39 @@ on the deployment metric (pipeline raw 0.895 vs v1 0.877) but worse end-to-end (
 trained to expect complex stacks, it over-calls restrictions on the mostly-simple real poles.
 A clean distribution-shift lesson: optimize for the eval distribution you will actually deploy
 on. For SF, that is mostly 0-2 sign poles, so v1's distribution generalized better end-to-end.
+
+## v4: human labels + realism + 2x real data (the honest answer on the real gap)
+
+v4 folds in everything aimed at the sim-to-real gap: human-verified labels, two new sign types
+(angle parking, week-of-month street cleaning), renderer realism augmentation (sky/building
+backgrounds, fading, occlusion, perspective), and roughly double the real training photos.
+
+On **synthetic**, it clearly beats v1, exactly where the new data targets:
+
+| Metric (synthetic) | base | v1 | **v4** |
+|---|:---:|:---:|:---:|
+| Read F1 | 0.34 | 0.96 | **0.985** |
+| Reasoning, e2e | 0.16 | 0.76 | **0.82** |
+| Reasoning, pipeline | 0.83 | 0.97 | **0.99** |
+| 4-sign e2e (the ticket pole) | 0.17 | 0.39 | **0.56** |
+
+On **real photos**, the headline finding is a null result, and it is the useful one:
+
+| Metric (500 held-out real photos) | base | v1 | **v4** |
+|---|:---:|:---:|:---:|
+| Read F1 | 0.04 | 0.33 | 0.34 |
+| Reasoning, pipeline (raw) | 0.78 | 0.88 | 0.89 |
+| Reasoning, e2e | 0.10 | 0.62 | 0.41 |
+
+**The takeaway.** Doubling real data, adding human labels, and augmenting the renderer for
+realism moved real read F1 by one point (0.33 -> 0.34). That is strong evidence the real-photo
+gap is **not** a data-volume problem: it is model capacity. The fix is almost certainly to stop
+freezing the vision encoder (we currently LoRA only the language layers) and let a vision-encoder
+LoRA learn faded, oblique, real-world glyphs. A full SFT would not help while the vision tower
+stays frozen. That is the v5 experiment.
+
+The pipeline path (VLM read -> deterministic resolver) again proves its worth: even with reading
+stuck at 0.34, pipeline reasoning on real holds at 0.89, because the resolver never fluffs the
+logic. And as with v2, v4's end-to-end reasoning regressed on real (0.62 -> 0.41): a model trained
+on harder, busier stacks over-calls restrictions on the mostly-simple real poles. Deploy the
+pipeline, not end-to-end.
