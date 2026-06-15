@@ -41,3 +41,15 @@ CC photo repositories, SF civic data).
 
 - UW Tacoma parking-sign dataset (4,191 images, 27 symbol classes, unreleased):
   email uwcheng@uw.edu, cite IJCAI-2022 AI4AD workshop paper.
+
+## Cross-CA expansion (2026-06-14)
+
+- **Mapillary: SHELVED.** Tested across Oakland/Berkeley. Tons of parking-sign detections
+  (222 in 4 tiles) but only ~3% are >=110px (readable); wide dashcam FOV captures signs too
+  small/distant even after MVT-geometry crops. Our task needs close-ups. `harvest/mapillary_ca.py`
+  kept for reference, marked shelved.
+- **The lesson:** SF 311/DPW worked because those systems collect deliberate sign close-ups.
+  The right CA expansion is other cities' 311 / SeeClickFix systems with photo attachments,
+  not street-level imagery. Oakland (data.oaklandca.gov) and San Jose (data.sanjoseca.gov)
+  portals are live; photo availability per-dataset is the open question (needs a sourcing sweep
+  like the original SF hunt). NYC 311 confirmed to have NO photo field.

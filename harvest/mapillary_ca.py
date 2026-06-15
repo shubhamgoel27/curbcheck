@@ -1,4 +1,9 @@
-"""Harvest parking-sign street imagery from Mapillary across California regions
+"""SHELVED (2026-06-14): Mapillary tested but only ~3% of detected parking signs
+are large enough to read (>=110px); its wide dashcam FOV captures signs too small/
+distant. Our task needs close-ups (SF 311/DPW provide these; street imagery does not).
+Kept for reference. See notes/sources.md.
+
+Harvest parking-sign street imagery from Mapillary across California regions
 where Caltrans sign specs + the CA parking regime apply (so read AND reason stay
 valid, unlike out-of-state).
 
