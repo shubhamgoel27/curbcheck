@@ -59,7 +59,7 @@ image = (
         modal.Secret.from_name("huggingface"),
         # wandb optional: create the secret and add it back to enable curve logging
     ],
-    timeout=4 * 60 * 60,
+    timeout=6 * 60 * 60,  # xformers fell back to PyTorch attn (~9s/it); 6h covers 1438 steps + load with margin
 )
 def train(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = False,
           manifest: str = "/data/train.jsonl", run: str = "qwen25vl3b"):
