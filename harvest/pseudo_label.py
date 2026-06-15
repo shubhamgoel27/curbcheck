@@ -112,7 +112,7 @@ def main() -> None:
         ok = isinstance(pred, list)
         if ok:  # drop unreadable-fragment restrictions (all-null timing fields)
             pred = [r for r in pred if isinstance(r, dict) and
-                    (r.get("days") or r.get("start") or r.get("end"))]
+                    (r.get("days") or r.get("start") or r.get("end") or r.get("kind")=="angle_parking")]
         return {"image": str(it["path"].relative_to(ROOT)), "source": it["source"],
                 "label": pred if ok else None, "parse_ok": ok,
                 "n_signs": len(pred) if ok else 0, "raw": raw,

@@ -90,7 +90,7 @@ def label_v3(path: Path):
     pred = extract_json(m[-1] if m else raw)
     ok = isinstance(pred, list)
     if ok:
-        pred = [r for r in pred if isinstance(r, dict) and (r.get("days") or r.get("start") or r.get("end"))]
+        pred = [r for r in pred if isinstance(r, dict) and (r.get("days") or r.get("start") or r.get("end") or r.get("kind")=="angle_parking")]
     return pred, ok, raw
 
 

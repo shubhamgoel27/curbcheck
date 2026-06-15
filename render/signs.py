@@ -19,7 +19,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from schema.rules import Day, Kind, Restriction, SignStack, Window, WEEKDAYS
+from schema.rules import Day, Kind, Restriction, SignStack, Window, WEEKDAYS, EVERY_DAY
 
 RED = (190, 30, 45)
 GREEN = (0, 105, 62)
@@ -104,6 +104,8 @@ def plate_lines(r: Restriction) -> list[tuple[str, tuple, float]]:
     if r.kind is Kind.LOADING_ONLY:
         return [("PASSENGER", BLACK, 0.8), ("LOADING ONLY", BLACK, 0.8),
                 (span, BLACK, 0.62), (days, BLACK, 0.62)]
+    if r.kind is Kind.ANGLE_PARKING:
+        return [("PARK AT", BLACK, 0.85), ("90", BLACK, 1.5), ("DEGREES", BLACK, 0.7)]
     raise ValueError(r.kind)
 
 
@@ -156,6 +158,8 @@ def rand_window(rng: random.Random, kind: Kind) -> Window:
 
 
 def sample_restriction(rng: random.Random, kind: Kind) -> Restriction:
+    if kind is Kind.ANGLE_PARKING:  # informational, full-day placeholder window
+        return Restriction(kind, Window(EVERY_DAY, time(0), time(23, 59)))
     w = rand_window(rng, kind)
     if kind is Kind.PERMIT_EXEMPT_LIMIT:
         return Restriction(kind, w, limit_minutes=rng.choice([60, 120, 240]),
@@ -171,9 +175,9 @@ def sample_restriction(rng: random.Random, kind: Kind) -> Restriction:
 
 # rough SF prevalence (SFMTA inventory: R30 time-limit/permit dominant, R32 cleaning next)
 KIND_WEIGHTS = [
-    (Kind.PERMIT_EXEMPT_LIMIT, 0.30), (Kind.STREET_CLEANING, 0.25),
+    (Kind.PERMIT_EXEMPT_LIMIT, 0.29), (Kind.STREET_CLEANING, 0.24),
     (Kind.TIME_LIMIT, 0.15), (Kind.NO_STOPPING, 0.12), (Kind.NO_PARKING, 0.08),
-    (Kind.TOW_AWAY, 0.06), (Kind.LOADING_ONLY, 0.04),
+    (Kind.TOW_AWAY, 0.05), (Kind.LOADING_ONLY, 0.04), (Kind.ANGLE_PARKING, 0.03),
 ]
 
 

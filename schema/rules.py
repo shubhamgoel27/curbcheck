@@ -32,6 +32,7 @@ class Kind(Enum):
     STREET_CLEANING = "street_cleaning"    # CA R32: no parking, specific weekday window
     PERMIT_EXEMPT_LIMIT = "permit_limit"   # RPP: time limit EXCEPT vehicles with area permit
     LOADING_ONLY = "loading_only"          # passenger/commercial loading zone window
+    ANGLE_PARKING = "angle_parking"        # informational: "PARK AT 90 DEGREES" etc. No verdict effect.
 
 
 @dataclass(frozen=True)
@@ -91,6 +92,8 @@ def can_park(stack: SignStack, when: datetime, permit_areas: frozenset[str] = fr
     """The resolver: ground truth for every generated question."""
     verdicts: list[Answer] = []
     for r in stack.restrictions:
+        if r.kind is Kind.ANGLE_PARKING:
+            continue  # informational ("park at 90 degrees"), never affects the verdict
         if not r.window.contains(when):
             continue
         if r.kind in (Kind.NO_STOPPING, Kind.NO_PARKING, Kind.STREET_CLEANING, Kind.LOADING_ONLY):

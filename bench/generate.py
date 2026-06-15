@@ -32,6 +32,9 @@ PROBES = [
 
 
 def restriction_to_json(r) -> dict:
+    if r.kind.value == "angle_parking":  # informational: no time window
+        return {"kind": "angle_parking", "days": None, "start": None, "end": None,
+                "limit_minutes": None, "permit_area": None, "tow": False, "weeks": None}
     return {
         "kind": r.kind.value,
         "days": sorted(d.name for d in r.window.days),
@@ -45,11 +48,11 @@ def restriction_to_json(r) -> dict:
 
 
 READ_PROMPT = """Look at the parking sign stack in this image. Extract EVERY sign as a JSON array.
-Each element: {"kind": one of [no_parking, no_stopping, tow_away, time_limit, permit_limit, street_cleaning, loading_only] (use permit_limit when the sign has a permit exemption like EXCEPT AREA X PERMIT, time_limit otherwise),
-"days": list like ["MON","TUE"...] (the days the restriction applies),
+Each element: {"kind": one of [no_parking, no_stopping, tow_away, time_limit, permit_limit, street_cleaning, loading_only, angle_parking] (use permit_limit when the sign has a permit exemption like EXCEPT AREA X PERMIT, time_limit otherwise; use angle_parking for orientation signs like "PARK AT 90 DEGREES" which do not restrict parking),
+"days": list like ["MON","TUE"...] (the days the restriction applies, null for angle_parking),
 "start": "HH:MM" 24h, "end": "HH:MM" 24h,
 "limit_minutes": int or null, "permit_area": letter or null, "tow": true/false,
-"weeks": list of which weeks of the month it applies like [2,4] for "2nd & 4th MONDAY", or null for every week}.
+"weeks": list of which weeks of the month it applies like [2,4] for "2nd & 4th MONDAY" (works on ANY sign type, not just cleaning), or null for every week}.
 Respond with ONLY the JSON array, nothing else."""
 
 REASON_PROMPT = """Look at the parking sign stack in this image. It is {when}. You have no parking permits.

@@ -14,7 +14,7 @@ are parking-related and which are not (speed limit, stop, street name, one-way: 
 
 Step 2. For every PARKING-related sign, produce one JSON object:
 {
-  "kind": one of [no_parking, no_stopping, tow_away, time_limit, permit_limit, street_cleaning, loading_only],
+  "kind": one of [no_parking, no_stopping, tow_away, time_limit, permit_limit, street_cleaning, loading_only, angle_parking],
   "days": ["MON","TUE",...] the weekdays it applies,
   "start": "HH:MM" 24-hour, "end": "HH:MM" 24-hour,
   "limit_minutes": integer or null,
@@ -34,7 +34,9 @@ Rules:
 - "2nd & 4th MONDAY" / "1st & 3rd TUE" -> days has the weekday, weeks = [2,4] / [1,3].
 - If a field is present on the sign but you cannot read it, set it null and confidence "low".
 - Do NOT emit an object unless at least one of days/start/end is legible.
-- Ignore non-parking signs entirely.
+- "PARK AT 90 DEGREES" / angle-parking diagrams: kind=angle_parking (informational, does not restrict; days/start/end null).
+- weeks-of-month ("2nd & 4th") can appear on ANY sign type, not only street cleaning. Capture it wherever you see it.
+- Ignore non-parking signs entirely (stop, speed, street name, one-way).
 
 Step 3. Output ONLY the final answer as a JSON array inside a fenced block:
 ```json
