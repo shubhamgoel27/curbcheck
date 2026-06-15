@@ -13,13 +13,28 @@ import modal
 app = modal.App("curbcheck-eval")
 vol = modal.Volume.from_name("curbcheck-data", create_if_missing=True)
 
+# base weights to bake into the image at build (downloaded once, then instant per container)
+PREFETCH = ["Qwen/Qwen2.5-VL-3B-Instruct", "HuggingFaceTB/SmolVLM2-2.2B-Instruct"]
+
+
+def _prefetch_weights():
+    from huggingface_hub import snapshot_download
+    for m in PREFETCH:
+        try:
+            snapshot_download(m, ignore_patterns=["*.pth", "*.onnx"])
+            print("prefetched", m)
+        except Exception as e:
+            print("prefetch skipped", m, e)
+
+
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
         "transformers>=4.49.0", "accelerate>=1.2.0", "pillow>=10.0.0",
         "torch>=2.5.0", "qwen-vl-utils", "einops", "torchvision",
-        "peft>=0.14.0", "bitsandbytes>=0.45.0", "num2words",
+        "peft>=0.14.0", "bitsandbytes>=0.45.0", "num2words", "huggingface_hub",
     )
+    .run_function(_prefetch_weights, secrets=[modal.Secret.from_name("huggingface")])
     .add_local_file("schema/rules.py", "/root/rules.py", copy=True)
 )
 

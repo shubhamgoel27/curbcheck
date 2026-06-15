@@ -22,6 +22,18 @@ import modal
 app = modal.App("curbcheck-train")
 vol = modal.Volume.from_name("curbcheck-data", create_if_missing=True)
 
+MODEL = "unsloth/Qwen2.5-VL-3B-Instruct-bnb-4bit"
+
+
+def _prefetch_base():
+    from huggingface_hub import snapshot_download
+    try:
+        snapshot_download(MODEL)
+        print("prefetched", MODEL)
+    except Exception as e:
+        print("prefetch skipped", e)
+
+
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("git")
@@ -33,10 +45,10 @@ image = (
         "pillow>=10.0.0",
         "wandb>=0.18.0",
         "accelerate>=1.2.0",
+        "huggingface_hub",
     )
+    .run_function(_prefetch_base, secrets=[modal.Secret.from_name("huggingface")])
 )
-
-MODEL = "unsloth/Qwen2.5-VL-3B-Instruct-bnb-4bit"
 
 
 @app.function(
