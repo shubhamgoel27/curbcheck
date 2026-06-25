@@ -62,7 +62,7 @@ image = (
     timeout=6 * 60 * 60,  # xformers fell back to PyTorch attn (~9s/it); 6h covers 1438 steps + load with margin
 )
 def train(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = False,
-          manifest: str = "/data/train.jsonl", run: str = "qwen25vl3b"):
+          manifest: str = "/data/train.jsonl", run: str = "qwen25vl3b", vision: bool = False):
     import json
     import os
     from pathlib import Path
@@ -79,10 +79,10 @@ def train(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = Fa
     # ---- resolve Mac-side image paths to volume paths ----
     # build a name->path index once over the real-image subdirs
     real_index = {}
-    for root in (Path("/data/real_images"), Path("/data/real_images_v3")):
+    for root in (Path("/data/real_images"), Path("/data/real_images_v3"), Path("/data/images_scf")):
         if not root.exists():
             continue
-        # v1 reals are nested in subdirs; v3 reals are flat
+        # v1 reals nested in subdirs; v3 flat; SCF nested by city
         for f in root.rglob("*.jpg"):
             real_index[f.name] = str(f)
 
@@ -114,7 +114,7 @@ def train(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = Fa
         MODEL, load_in_4bit=True, use_gradient_checkpointing="unsloth",
     )
     model = FastVisionModel.get_peft_model(
-        model, finetune_vision_layers=False, finetune_language_layers=True,
+        model, finetune_vision_layers=vision, finetune_language_layers=True,
         finetune_attention_modules=True, finetune_mlp_modules=True,
         r=16, lora_alpha=16, lora_dropout=0, bias="none", random_state=7,
     )
@@ -165,5 +165,12 @@ def train(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = Fa
 
 @app.local_entrypoint()
 def main(smoke: bool = False, batch: int = 16, accum: int = 1, probe: bool = False,
-         manifest: str = "/data/train.jsonl", run: str = "qwen25vl3b"):
-    train.remote(smoke=smoke, batch=batch, accum=accum, probe=probe, manifest=manifest, run=run)
+         manifest: str = "/data/train.jsonl", run: str = "qwen25vl3b", vision: bool = False):
+    # .spawn() (not .remote()) so a detached run is truly machine-independent: it keeps
+    # running server-side even if the local caller disconnects. The function commits the
+    # adapter to the volume, so detect completion by polling the volume for
+    # /runs/<run>/final/adapter_model.safetensors (NOT by grepping local logs, which no
+    # longer stream once the client exits).
+    fc = train.spawn(smoke=smoke, batch=batch, accum=accum, probe=probe, manifest=manifest,
+                     run=run, vision=vision)
+    print(f"spawned detached training: call_id={fc.object_id} run={run}")

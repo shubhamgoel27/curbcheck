@@ -48,6 +48,7 @@ MODELS = {
     "tuned_v2": ("/data/runs/qwen25vl3b_v2/final", "qwen"),  # rebalanced student
     "tuned_v3": ("/data/runs/qwen25vl3b_v3/final", "qwen"),  # rebalanced + realism + v3-labels
     "tuned_v4": ("/data/runs/qwen25vl3b_v4/final", "qwen"),  # + human labels + angle/weeks
+    "tuned_v5": ("/data/runs/qwen25vl3b_v5/final", "qwen"),  # + cross-city consensus + vision-encoder unfrozen
 }
 
 
@@ -176,6 +177,8 @@ def run_model(model_key: str, dataset: str = "synth"):
                 frozenset(int(x) for x in (r.get("weeks") or [])))
 
     read_f1, by_n = [], {}
+    read_f1_signs = []                       # sign-bearing images only (the real "can it read")
+    abstain_hit = abstain_tot = 0            # no-sign images: correct read is []
     e2e_hit = e2e_tot = pipe_hit = pipe_tot = parse_ok = parse_tot = 0
     records = []
 
@@ -187,15 +190,19 @@ def run_model(model_key: str, dataset: str = "synth"):
         read_q = next(q for q in s["questions"] if q["type"] == "read")
         read_raw = infer(read_q["prompt"], img)
         read_pred = extract(read_raw)
-        if isinstance(read_pred, list):
-            p = {nkey(x) for x in read_pred if isinstance(x, dict)}
-            g = {nkey(x) for x in read_q["gold"]}
+        p = {nkey(x) for x in read_pred if isinstance(x, dict)} if isinstance(read_pred, list) else set()
+        g = {nkey(x) for x in read_q["gold"]}
+        if not g:
+            # no-sign image: the correct read is [] (abstention), not a failure
+            correct = isinstance(read_pred, list) and not p
+            abstain_tot += 1; abstain_hit += int(correct)
+            f1 = 1.0 if correct else 0.0
+        else:
             tp = len(p & g)
             pr = tp / len(p) if p else 0
             rc = tp / len(g) if g else 0
-            f1 = 2 * pr * rc / (pr + rc) if pr + rc else 0
-        else:
-            f1 = 0.0
+            f1 = 2 * pr * rc / (pr + rc) if pr + rc else 0.0
+            read_f1_signs.append(f1)
         read_f1.append(f1); by_n[n]["r"].append(f1)
         stack = build_stack(read_pred)
 
@@ -214,7 +221,7 @@ def run_model(model_key: str, dataset: str = "synth"):
             pv = can_park(stack, probe).verdict.value
             pipe_tot += 1; pipe_hit += int(pv == gold)
             by_n[n]["pipe"].append(int(pv == gold))
-            if model_key in ("qwen3b", "tuned", "tuned_v4"):  # keep audit trail for the headline models
+            if model_key in ("qwen3b", "tuned", "tuned_v4", "tuned_v5"):  # keep audit trail for the headline models
                 records.append({"image": s["image"].split("/")[-1], "n_signs": n,
                                 "probe": q["probe"], "gold": gold,
                                 "e2e_verdict": v, "e2e_parsed_json": ok,
@@ -235,6 +242,8 @@ def run_model(model_key: str, dataset: str = "synth"):
     return {
         "model": model_key, "hf_id": hf_id,
         "read_f1": rate(sum(read_f1) * 1, len(read_f1)) if read_f1 else None,
+        "read_f1_signs": round(sum(read_f1_signs) / len(read_f1_signs), 3) if read_f1_signs else None,
+        "abstain_acc": rate(abstain_hit, abstain_tot),
         "reason_e2e": rate(e2e_hit, e2e_tot),
         "reason_pipeline": rate(pipe_hit, pipe_tot),
         "verdict_parse_rate": rate(parse_ok, parse_tot),

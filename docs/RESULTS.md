@@ -66,6 +66,28 @@ audit logs in data/results/audit/.
 
 ## Real-photo eval (500 held-out SF photos, Opus-referenced)
 
+> **Correction (2026-06-24): the real-photo read metric was undercounting badly.** The read-F1
+> scorer counted a correct abstention (gold is `[]`, model outputs `[]`) as 0.0 instead of 1.0,
+> and 231 of the 500 eval images are downed/missing poles with no readable sign. So the headline
+> "real read F1 ~0.33" everywhere below is an artifact: ~46% of the set was scored as a failure
+> for correctly reading nothing. Corrected (base / v4 / v5):
+>
+> | metric (real photos) | base | v4 | v5 |
+> |---|:---:|:---:|:---:|
+> | Read F1, sign-bearing images (the honest "can it read") | 0.08 | 0.63 | 0.62 |
+> | Read F1, all 500 (correct abstention = 1.0) | 0.31 | 0.73 | 0.72 |
+> | Abstain correctly on no-sign images | 0.57 | 0.84 | 0.83 |
+> | Reasoning, pipeline | 0.77 | 0.89 | 0.90 |
+> | Reasoning, end-to-end | 0.09 | 0.41 | 0.82 |
+>
+> Against a stricter 3-vote Opus consensus gold (the old single-pass gold agrees with it at only
+> 0.82 F1, and exactly matches it on 76% of images), v5 sign-bearing reading is ~0.52. So the
+> honest read story: the model reads real sign-bearing photos at **~0.52-0.62 F1** and **abstains
+> correctly ~83%** of the time, not the 0.33 reported below. Reading is essentially tied between
+> v4 and v5; v5's real gain is reasoning (e2e 0.41 -> 0.82). Scorer fix: `read_f1_signs` +
+> `abstain_acc` in modal_app/eval_sweep.py. Everything below is kept for the record but superseded
+> by this block.
+
 The true test: 500 newest 311 reserve photos, never seen in training, labeled by Opus as gold.
 This is teacher-referenced (gold = frontier model, not human-verified), so it measures how well
 the student matches a strong teacher on real, faded, oblique poles.

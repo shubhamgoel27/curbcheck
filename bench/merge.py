@@ -43,10 +43,12 @@ def load_real() -> list[dict]:
             out.append({"image": str(ROOT / r["image"]), "task": "read",
                         "prompt": READ_PROMPT, "response": json.dumps(r["label"]),
                         "domain": "real"})
-    # v3 labels: use ONLY the high-confidence restrictions (cleaner truth)
-    v3 = ROOT / "data/real_train/pseudo_labels_v3.jsonl"
-    if v3.exists():
-        for r in map(json.loads, v3.open()):
+    # v3 + cross-city SCF labels: use ONLY the high-confidence restrictions (cleaner truth)
+    for name in ("pseudo_labels_v3.jsonl", "labels_scf_v3.jsonl"):
+        f = ROOT / "data/real_train" / name
+        if not f.exists():
+            continue
+        for r in map(json.loads, f.open()):
             hc = r.get("label_high_conf")
             if r["parse_ok"] and hc:
                 # drop the confidence key from the training target
@@ -57,13 +59,35 @@ def load_real() -> list[dict]:
     return out
 
 
+def load_consensus() -> dict[str, list]:
+    """3-vote consensus labels (majority-agreed) keyed by abs image path. Higher
+    quality than single-pass Opus, so they OVERRIDE it. Empty consensus (votes
+    disagreed or all dropped) -> excluded from training entirely (too uncertain)."""
+    out = {}
+    f = ROOT / "data/real_train/consensus_labels.jsonl"
+    if not f.exists():
+        return out
+    for r in map(json.loads, f.open()):
+        if not r.get("ok"):
+            continue
+        lab = [{k: v for k, v in x.items() if k != "confidence"}
+               for x in (r.get("label_high_conf") or [])]
+        out[str(ROOT / r["image"])] = lab  # may be [] -> exclude (uncertain)
+    return out
+
+
 def load_real_negatives(limit: int) -> list[dict]:
-    """Zero-sign photos teach abstention: the correct read is []."""
+    """Zero-sign photos teach abstention: the correct read is []. The cross-city
+    SCF harvest (wide street shots, vehicle photos) is a rich, diverse negative pool."""
     out = []
-    for r in map(json.loads, (ROOT / "data/real_train/pseudo_labels.jsonl").open()):
-        if r["parse_ok"] and r["n_signs"] == 0:
-            out.append({"image": str(ROOT / r["image"]), "task": "read",
-                        "prompt": READ_PROMPT, "response": "[]", "domain": "real"})
+    for name in ("pseudo_labels.jsonl", "pseudo_labels_v3.jsonl", "labels_scf_v3.jsonl"):
+        f = ROOT / "data/real_train" / name
+        if not f.exists():
+            continue
+        for r in map(json.loads, f.open()):
+            if r.get("parse_ok") and r.get("n_signs", 0) == 0:  # teacher emitted [] = truly no sign
+                out.append({"image": str(ROOT / r["image"]), "task": "read",
+                            "prompt": READ_PROMPT, "response": "[]", "domain": "real"})
     random.Random(0).shuffle(out)
     return out[:limit]
 
@@ -91,9 +115,21 @@ def main() -> None:
     args = ap.parse_args()
 
     synth = load_synth()
-    human = load_human()
     real_pos = load_real()
-    # human labels override Opus for the same image (and add new ones)
+    # consensus (3-vote) overrides single-pass Opus for the same image; empty -> exclude
+    consensus = load_consensus()
+    if consensus:
+        real_pos = [r for r in real_pos if r["image"] not in consensus]
+        added = 0
+        for img, lab in consensus.items():
+            if lab:
+                real_pos.append({"image": img, "task": "read", "prompt": READ_PROMPT,
+                                 "response": json.dumps(lab), "domain": "real"})
+                added += 1
+        print(f"consensus override: {len(consensus)} images ({added} positive, "
+              f"{len(consensus)-added} excluded as uncertain)")
+    human = load_human()
+    # human labels override everything for the same image (and add new ones)
     if human:
         real_pos = [r for r in real_pos if r["image"] not in
                     {str(ROOT / p) for p in human}]

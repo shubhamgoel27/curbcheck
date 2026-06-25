@@ -4,3 +4,9 @@ __pycache__/
 *.pyc
 .DS_Store
 .env
+
+# large local artifacts
+hf_space/adapter/
+hf_space/adapter_v5/
+video/
+tmp_ev
